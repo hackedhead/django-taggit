@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 from operator import attrgetter
 
 from django import VERSION
+from django.conf import settings
 try:
     from django.contrib.contenttypes.fields import GenericRelation
 except ImportError:  # django < 1.7
@@ -11,6 +12,7 @@ from django.db import models, router
 from django.db.models.fields import Field
 from django.db.models.fields.related import ManyToManyRel, RelatedField, add_lazy_relation
 from django.db.models.related import RelatedObject
+from django.templates.defaultfilters import slugify as default_slugify
 from django.utils.text import capfirst
 from django.utils.translation import ugettext_lazy as _
 from django.utils import six
@@ -134,16 +136,27 @@ class _TaggableManager(models.Manager):
             if not isinstance(t, self.through.tag_model())
         ])
         tag_objs = set(tags) - str_tags
-        # If str_tags has 0 elements Django actually optimizes that to not do a
-        # query.  Malcolm is very smart.
-        existing = self.through.tag_model().objects.filter(
-            name__in=str_tags
-        )
-        tag_objs.update(existing)
+        itags = set()
+        if getattr(settings,'TAGGIT_SLUG_MATCHING',False): # match tags by slug
+            for str_tag in str_tags: # make sure tags exist for all (probably new) strings
+                str_slug = default_slugify(str_tag)
+                itag, created = self.through.tag_model().objects.get_or_create(slug=str_slug,defaults={'name':str_tag})
+                itags.add(itag)
+            for tab_obj in tag_objs: # make sure tags exists for all (probably extant) tag objects
+                itag, created = self.through.tag_model().objects.get_or_create(slug=tag_obj.slug,defaults={'name':tag_obj.name})
+                itags.add(itag)
+            tag_objs = itags # overwrite list of tags to add to model
+        else: # do it the old way
+            # If str_tags has 0 elements Django actually optimizes that to not do a
+            # query.  Malcolm is very smart.
+            existing = self.through.tag_model().objects.filter(
+                name__in=str_tags
+            )
+            tag_objs.update(existing)
 
-        for new_tag in str_tags - set(t.name for t in existing):
-            tag_objs.add(self.through.tag_model().objects.create(name=new_tag))
-
+            for new_tag in str_tags - set(t.name for t in existing):
+                tag_objs.add(self.through.tag_model().objects.create(name=new_tag))
+        # add the tags to the item being tagged
         for tag in tag_objs:
             self.through.objects.get_or_create(tag=tag, **self._lookup_kwargs())
 

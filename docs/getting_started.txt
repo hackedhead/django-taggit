@@ -31,3 +31,11 @@ And then to any model you want tagging on do the following::
 
         tags = TaggableManager()
 
+Optionally, taggit can help you prevent similar tags from being created, by
+trying to match new tags to existing tags based on the slugs that are
+generated for each. With this option enabled, an existing tag of "Foo Bar"
+with slug "foo-bar" will be used if a user enters "foo-bar","foo BAR", FOO
+BAR", etc, instead of creating a new tag with slug "foo-bar_1". To enable this
+slug matching add the following setting:
+
+   TAGGIT_SLUG_MATCHING = True 
