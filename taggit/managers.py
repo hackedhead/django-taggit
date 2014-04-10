@@ -137,13 +137,26 @@ class _TaggableManager(models.Manager):
         ])
         tag_objs = set(tags) - str_tags
         itags = set()
-        if getattr(settings,'TAGGIT_SLUG_MATCHING',False): # match tags by slug
+        if getattr(settings,'TAGGIT_SLUG_MATCHING',False): # try to find tag by exact name, fall back on slug, else create
+            tag_model = self.through.tag_model()
             for str_tag in str_tags: # make sure tags exist for all (probably new) strings
                 str_slug = default_slugify(str_tag)
-                itag, created = self.through.tag_model().objects.get_or_create(slug=str_slug,defaults={'name':str_tag})
+                itag = None
+                try:
+                    itag = tag_model.objects.get(name=str_tag)
+                except tag_model.DoesNotExist:
+                    pass # itag = None
+                if itag is None:
+                    itag, created = self.through.tag_model().objects.get_or_create(slug=str_slug,defaults={'name':str_tag})
                 itags.add(itag)
             for tab_obj in tag_objs: # make sure tags exists for all (probably extant) tag objects
-                itag, created = self.through.tag_model().objects.get_or_create(slug=tag_obj.slug,defaults={'name':tag_obj.name})
+                itag = None
+                try:
+                    itag = tag_model.objects.get(name=tag_obj.name)
+                except tag_model.DoesNotExist:
+                    pass # itag = None
+                if itag is None:
+                    itag, created = tag_model.objects.get_or_create(slug=tag_obj.slug,defaults={'name':tag_obj.name})
                 itags.add(itag)
             tag_objs = itags # overwrite list of tags to add to model
         else: # do it the old way
